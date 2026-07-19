@@ -1,0 +1,56 @@
+name: Build and Deploy Ramtun (Client & Server)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 1. Compilar y subir el CLIENTE (Frontend)
+      - name: Build and push Client
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/client/Dockerfile # Ajusta la ruta exacta a tu Dockerfile del cliente
+          push: true
+          tags: ghcr.io/benjaminespinozafk/ramtun-client:latest
+
+      # 2. Compilar y subir el SERVIDOR (Backend Rust)
+      - name: Build and push Server
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/server/Dockerfile # Ajusta la ruta exacta a tu Dockerfile del servidor
+          push: true
+          tags: ghcr.io/benjaminespinozafk/ramtun-server:latest
+
+  deploy-kubero:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      # Notificar a Kubero que actualice el Cliente
+      - name: Trigger Kubero Client Webhook
+        run: |
+          curl -X POST "https://uct.cl" \
+          -H "Content-Type: application/json" \
+          -d '{"repository": "benjaminespinozafk/ramtun-client", "tag": "latest"}'
+
+      # Notificar a Kubero que actualice el Servidor
+      - name: Trigger Kubero Server Webhook
+        run: |
+          curl -X POST "https://uct.cl" \
+          -H "Content-Type: application/json" \
+          -d '{"repository": "benjaminespinozafk/ramtun-server", "tag": "latest"}'
